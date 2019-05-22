@@ -3,7 +3,8 @@
 """
 Created on Wen May  8 21:27:47 2019
 
-@author: amie
+@author: caxenie & amie
+
 """
 
 
@@ -21,9 +22,8 @@ from time import ctime, sleep
 
 class Func(QWidget):
     
-    #定义信号，定义槽函数和信号函数的链接在thread.py中
-    senddata = pyqtSignal(dict,dict,int)
-    senddata1 = pyqtSignal(dict,dict,int)
+    senddata = pyqtSignal(dict,dict,int,list)
+    senddata1 = pyqtSignal(dict,dict,int,list)
     
     def __init__(self):
         super().__init__()
@@ -44,13 +44,50 @@ class Func(QWidget):
         self.XI = 1e-3; # weights decay
         # enable population wrap-up to cancel out boundary effects 
         self.WRAP_ON = 0;
-        
+        self.SensorIndex = 1
+        self.train_startflag = False
+        self.pref = [1, 6, 13, 40, 45, 85, 90, 98]
         self.population = {}
         self.sensor_data = {}
 
         
+
+    def change_pref(self,text):
+        pre = text.split(',')
+        self.pref = [int(x) for x in pre]
         
-        ## xinhao cao 
+        
+    def change_trainstartflag(self):
+        self.train_startflag = True
+    
+    
+    def change_NeuronsNum(self, text):
+        print('NeuronsNum:', text)
+        self.N_NEURONS = int(text)
+#        pass
+    
+    def change_EpochsValue(self,text):
+        print('EpochsValue:', text)
+        self.MAX_EPOCHS_XMOD_LRN = int(text)
+        
+    
+    def change_SAMPLESNum(self,text):
+        print('SAMPLESNum:', text)
+        self.N_SAMPLES = int(text)
+    
+    def change_ETAValue(self,text):
+        print('ETAValue:', text)
+        self.ETA = float(text)
+    
+    def change_XIValue(self,text):
+        print('XIValue:', text)
+        self.XI = float(text)
+    
+    def change_SensoryIndex(self,text):
+        print('SensoryIndex:', text)
+        self.SensorIndex = int(text)
+        
+    
     def changevisualize(self):
         print('You have set DYN_VISUAL = 1')
         print('please be patient, the training is very slow')
@@ -125,7 +162,7 @@ class Func(QWidget):
     #create a network of SOMs given the simulation constants
         populations = []    
         wcross = np.random.uniform(0,1,(N_NEURONS,N_NEURONS))
-        sigma_def = 0.045 #固定为调整曲线归一化高度的一半
+        sigma_def = 0.045
         for pop_idx in range(1,N_POP+1):
             population_dic = {}
             population_dic['idx'] = pop_idx
@@ -150,7 +187,6 @@ class Func(QWidget):
             B = (vf*tf - v0*t0)/(v0 - vf)
             A = v0*t0 + B*v0
             y = [A/(t[i]+B) for i in range(len(t))]
-#            y = A/(t+B)
         elif ftype == 'exp':
             if v0 < 1:
                 p = -math.log(v0)
@@ -181,7 +217,7 @@ class Func(QWidget):
         ax3 = plt.subplot(4,1,3)
         ax4 = plt.subplot(4,1,4)
 
-        #####   ax1 = plt.subplot(4,1,1) 
+        # ax1 = plt.subplot(4,1,1) 
         plt.sca(ax1)
         if pop['idx'] == 1:
             plt.hist(sdata['x'],bins=50,facecolor="blue", edgecolor="black", alpha=0.7)            
@@ -189,7 +225,7 @@ class Func(QWidget):
             plt.hist(sdata['y'],bins=50,facecolor="blue", edgecolor="black", alpha=0.7)
         plt.xlabel('range pop {0} '.format(pop['idx']))
         plt.ylabel('input values distribution')
-        #####ax2 = plt.subplot(4,1,2)
+        # ax2 = plt.subplot(4,1,2)
         plt.sca(ax2)
         # compute the tuning curve of the current neuron in the population
         # the equally spaced mean values
@@ -199,8 +235,8 @@ class Func(QWidget):
             v_pref = pop['Winput'][idx]
             fx = np.exp(-(x - v_pref)**2/(2*pop['s'][idx]**2))
             plt.plot([x for x in range(100)],fx,linewidth=3)
-        pop['Winput'] = np.sort(pop['Winput'],axis=0)  #notice keng
-        plt.xticks([])  # quxiao x value
+        pop['Winput'] = np.sort(pop['Winput'],axis=0)
+        plt.xticks([])
         plt.yticks([])
         ax2.spines['top'].set_visible(False)
         ax2.spines['right'].set_visible(False)
@@ -226,12 +262,12 @@ class Func(QWidget):
         plt.plot(pop['s'],'.r')
         plt.xlabel('neuron index')
         plt.ylabel('width of tuning curves')
-    #DISPLAY ONLY SOME NEURONS
+        #DISPLAY ONLY SOME NEURONS
         fig2 = plt.figure()
         bx1 = plt.subplot(1,1,1)
-        #print(plt.gca())
+        # print(plt.gca())
         v_pref = np.sort(pop['Winput'],axis=0)  #notice keng
-        pref= [1, 6, 13, 40, 45, 85, 90, 98]
+        pref= self.pref
         for idx in range(len(pref)):
             idx_pref = pref[idx]
             fx = np.exp(-(x - v_pref[idx_pref])**2/(2*pop['s'][idx_pref]**2))
@@ -271,6 +307,7 @@ class Func(QWidget):
         for idx in range(populations[0]['lsize']):
             arr =  populations[0]['Wcross'][idx,:]
             id_maxv[idx] = np.where(arr==np.max(arr))
+        
         ax2.imshow(populations[0]['Wcross'].T, extent=[0,100,100,0])
         plt.xlabel('neuron index')
         plt.ylabel('neuron index')
@@ -302,147 +339,153 @@ class Func(QWidget):
         
     def main_thread(self,train=True):
         
-        #激活信号，激活对应的槽函数
-#        a = {'x':3}
-#        self.senddata.emit(a)
-        
-    # INIT INPUT DATA - RELATION IS EMBEDDED IN THE INPUT DATA PAIRS
-        sensory_data = self.init_input_data()
-  
-    # CREATE NETWORK AND INITIALIZE PARAMS
-        #populations = [{},{}]
-        populations = self.create_network_and_initialize_params(N_POP=self.N_SOM, N_NEURONS=self.N_NEURONS)
-        act_cur = np.zeros((self.N_NEURONS,1)) 
-        hwi = np.zeros((self.N_NEURONS,1)) 
-        learning_params = {}
-        learning_params['t0'] = 1
-        learning_params['tf_learn_in'] = self.MAX_EPOCHS_IN_LRN
-        learning_params['tf_learn_cross'] = self.MAX_EPOCHS_XMOD_LRN
-        sigma0 = self.N_NEURONS/2
-        sigmaf = 1
-        learning_params['sigmat'] = self.parametrize_learning_law(sigma0,sigmaf,learning_params['t0'],learning_params['tf_learn_in'],'invtime')
-        alpha0 = 0.1
-        alphaf = 0.001
-        learning_params['alphat'] = self.parametrize_learning_law(alpha0,alphaf,learning_params['t0'],learning_params['tf_learn_in'],'invtime')
-        # cross-modal learning rule type
-        cross_learning = 'covariance' #{hebb - Hebbian, covariance - Covariance, oja - Oja's Local PCA}
-        #  mean activities for covariance learning
-        avg_act = np.zeros((self.N_NEURONS,self.N_SOM))
-    # NETWORK SIMULATION LOOP
-        if train:
-            print('Started training ...\n')
-            
-            for t in range(1,100): #1 dao 100   {learning_params['tf_learn_cross']+1}
-#                if self.DYN_VISUAL == 1:
-#                    self.visualize_runtime(populations,t)
-                if  t<= learning_params['tf_learn_in']:  # t qu [0,50]
-                    for didx in range(sensory_data['num_vals']):  #ci chu 0.1 wenti  (didx qu 0 dao 1449)
-                        for pidx in range(1,self.N_SOM+1):  # pidx qu 1 dao 2
-                            act_cur = np.zeros((populations[pidx-1]['lsize'],1)) #ci chu 0,1wenti 
-                            if pidx == 1:
-                                input_sample = sensory_data['x'][didx]
-                            elif pidx == 2:
-                                input_sample = sensory_data['y'][didx]
-                            else:
-                                print('pidx is out of range')
-                            # compute new activity given the current input sample
-                            for idx in range(populations[pidx-1]['lsize']): # idx qu 0 dao 99
-                                act_cur[idx] = (1/(math.sqrt(2*math.pi)*populations[pidx-1]['s'][idx]))*math.exp(-(input_sample - populations[pidx-1]['Winput'][idx])**2/(2*populations[pidx-1]['s'][idx]**2))
-                            #  normalize the activity vector of the population
-                            act_cur = act_cur / act_cur.sum()
-                            # update the activity for the next iteration
-                            populations[pidx-1]['a'] = (1-self.ETA)*populations[pidx-1]['a'] + self.ETA*act_cur
-                            arr = populations[pidx-1]['a']
-                            win_act = np.max(populations[pidx-1]['a'])
-                            win_pos = np.where(arr==np.max(arr))[0][0]
-                            for idx in range(populations[pidx-1]['lsize']): #0 dao 99,go through neurons in the population
-                                if self.WRAP_ON == 1:
-                                    hwi[idx] = math.exp(-linalg.norm(min([linalg.norm(idx-win_pos), self.N_NEURONS - linalg.norm(idx-win_pos)]))**2/(2*learning_params['sigmat'][t-1]**2))
-                                else:
-                                    # simple Gaussian kernel with no boundary compensation
-                                    hwi[idx] = math.exp(-linalg.norm(idx-win_pos)**2/(2*learning_params['sigmat'][t-1]**2))
-                                populations[pidx - 1]['Winput'][idx] = populations[pidx - 1]['Winput'][idx] + \
-                                learning_params['alphat'][t-1] * hwi[idx] * (input_sample - populations[pidx - 1]['Winput'][idx])
-                                populations[pidx-1]['s'][idx] = populations[pidx-1]['s'][idx] + \
-                                learning_params['alphat'][t-1] *  (1/(math.sqrt(2*math.pi)*learning_params['sigmat'][t-1])) * \
-                                hwi[idx] * ((input_sample - populations[pidx-1]['Winput'][idx])**2 - populations[pidx-1]['s'][idx]**2)
-                        
-                        if self.DYN_VISUAL == 1 and didx % 100 == 99:
-                            self.senddata.emit(populations[0],sensory_data,0)
-                            self.senddata1.emit(populations[1],sensory_data,1)
-                            sleep(1.5)
-                                
-                                
-                # learn the cross-modal correlation
-                for didx in range(sensory_data['num_vals']): #(0-1449)
-                    for pidx in range(1,self.N_SOM+1):
-                        #  pick a new sample from the dataset and feed it to the current layer
-                        if pidx == 1:
-                                input_sample = sensory_data['x'][didx]
-                        elif pidx == 2:
-                            input_sample = sensory_data['y'][didx]
-                        for idx in range(populations[pidx-1]['lsize']): # idx qu 0 dao 99
-                             act_cur[idx] = (1/(math.sqrt(2*math.pi)*populations[pidx-1]['s'][idx]))*math.exp(-(input_sample - populations[pidx-1]['Winput'][idx])**2/(2*populations[pidx-1]['s'][idx]**2))
-                        #  normalize the activity vector of the population
-                        act_cur = act_cur / act_cur.sum()
-                        # update the activity for the next iteration
-                        populations[pidx-1]['a'] = (1-self.ETA)*populations[pidx-1]['a'] + self.ETA*act_cur
-                    if cross_learning == 'hebb':
-                        populations[0]['Wcross'] = (1-self.XI)*populations[0]['Wcross'] + self.XI*populations[0]['a']*populations[1]['a'].T;
-                        populations[1]['Wcross'] = (1-self.XI)*populations[1]['Wcross'] + self.XI*populations[1]['a']*populations[0]['a'].T;
-                    elif cross_learning == 'covariance':
-                        # compute the mean value computation decay
-                        OMEGA = 0.002 + 0.998/(t+2)
-                        for pidx in range(self.N_SOM): # 0 de wen ti 
-                            avg_act[:, pidx] = (1-OMEGA)*avg_act[:, pidx] + OMEGA*populations[pidx]['a'][:,0]
-                        # cross-modal Hebbian covariance learning rule: update the synaptic weights
-                        populations[0]['Wcross'] = (1-self.XI)*populations[0]['Wcross'] + self.XI*(populations[0]['a'] - avg_act[:, 0].reshape(100,1))*(populations[1]['a'] - avg_act[:, 1].reshape(100,1)).T
-                        populations[1]['Wcross'] = (1-self.XI)*populations[1]['Wcross'] + self.XI*(populations[1]['a'] - avg_act[:, 1].reshape(100,1))*(populations[0]['a'] - avg_act[:, 0].reshape(100,1)).T
-                    elif cross_learning == 'oja':
-                        # Oja's local PCA learning rule
-                        populations[0]['Wcross'] = ((1-self.XI)*populations[0]['Wcross'] + self.XI*populations[0]['a']*populations[1]['a'].T)/math.sqrt(sum(sum((1-self.XI)*populations[0]['Wcross'] + self.XI*populations[0]['a']*populations[1]['a'].T)))
-                        populations[1]['Wcross'] = ((1-self.XI)*populations[1]['Wcross'] + self.XI*populations[1]['a']*populations[0]['a'].T)/math.sqrt(sum(sum((1-self.XI)*populations[1]['Wcross'] + self.XI*populations[1]['a']*populations[0]['a'].T)));
-                    else:
-                        print('cross_learning type is not hebb neigher covariance')
+        while 1:
+            sleep(1)
+            if self.train_startflag:
                 
-#                self.savevalues() 
-#                print('Wcross_shape:',np.shape(populations[0]['Wcross']))
+            # INIT INPUT DATA - RELATION IS EMBEDDED IN THE INPUT DATA PAIRS
+                sensory_data = self.init_input_data()
+          
+            # CREATE NETWORK AND INITIALIZE PARAMS
+                #populations = [{},{}]
+                populations = self.create_network_and_initialize_params(N_POP=self.N_SOM, N_NEURONS=self.N_NEURONS)
+                act_cur = np.zeros((self.N_NEURONS,1)) 
+                hwi = np.zeros((self.N_NEURONS,1)) 
+                learning_params = {}
+                learning_params['t0'] = 1
+                learning_params['tf_learn_in'] = self.MAX_EPOCHS_IN_LRN
+                learning_params['tf_learn_cross'] = self.MAX_EPOCHS_XMOD_LRN
+                sigma0 = self.N_NEURONS/2
+                sigmaf = 1
+                learning_params['sigmat'] = self.parametrize_learning_law(sigma0,sigmaf,learning_params['t0'],learning_params['tf_learn_in'],'invtime')
+                alpha0 = 0.1
+                alphaf = 0.001
+                learning_params['alphat'] = self.parametrize_learning_law(alpha0,alphaf,learning_params['t0'],learning_params['tf_learn_in'],'invtime')
+                # cross-modal learning rule type
+                cross_learning = 'covariance' #{hebb - Hebbian, covariance - Covariance, oja - Oja's Local PCA}
+                #  mean activities for covariance learning
+                avg_act = np.zeros((self.N_NEURONS,self.N_SOM))
+                # NETWORK SIMULATION LOOP
+                if train:
+                    print('Started training ...\n')
                     
-                    if self.DYN_VISUAL == 1 and didx % 100 == 99:
-                        #print('go111')
-                        self.senddata.emit(populations[0],sensory_data,0)
-                        self.senddata1.emit(populations[1],sensory_data,1)
-                        sleep(1.5)
+                    for t in range(1,learning_params['tf_learn_cross']+1): #1 dao 100   {learning_params['tf_learn_cross']+1}
+        #                if self.DYN_VISUAL == 1:
+        #                    self.visualize_runtime(populations,t)
+                        if  t<= learning_params['tf_learn_in']:  # t qu [0,50]
+                            for didx in range(sensory_data['num_vals']):  #ci chu 0.1 wenti  (didx qu 0 dao 1449)
+                                for pidx in range(1,self.N_SOM+1):  # pidx qu 1 dao 2
+                                    act_cur = np.zeros((populations[pidx-1]['lsize'],1)) #ci chu 0,1wenti 
+                                    if pidx == 1:
+                                        input_sample = sensory_data['x'][didx]
+                                    elif pidx == 2:
+                                        input_sample = sensory_data['y'][didx]
+                                    else:
+                                        print('pidx is out of range')
+                                    # compute new activity given the current input sample
+                                    for idx in range(populations[pidx-1]['lsize']): # idx qu 0 dao 99
+                                        act_cur[idx] = (1/(math.sqrt(2*math.pi)*populations[pidx-1]['s'][idx]))*math.exp(-(input_sample - populations[pidx-1]['Winput'][idx])**2/(2*populations[pidx-1]['s'][idx]**2))
+                                    #  normalize the activity vector of the population
+                                    act_cur = act_cur / act_cur.sum()
+                                    # update the activity for the next iteration
+                                    populations[pidx-1]['a'] = (1-self.ETA)*populations[pidx-1]['a'] + self.ETA*act_cur
+                                    arr = populations[pidx-1]['a']
+                                    win_act = np.max(populations[pidx-1]['a'])
+                                    win_pos = np.where(arr==np.max(arr))[0][0]
+                                    for idx in range(populations[pidx-1]['lsize']): #0 dao 99,go through neurons in the population
+                                        if self.WRAP_ON == 1:
+                                            hwi[idx] = math.exp(-linalg.norm(min([linalg.norm(idx-win_pos), self.N_NEURONS - linalg.norm(idx-win_pos)]))**2/(2*learning_params['sigmat'][t-1]**2))
+                                        else:
+                                            # simple Gaussian kernel with no boundary compensation
+                                            hwi[idx] = math.exp(-linalg.norm(idx-win_pos)**2/(2*learning_params['sigmat'][t-1]**2))
+                                        populations[pidx - 1]['Winput'][idx] = populations[pidx - 1]['Winput'][idx] + \
+                                        learning_params['alphat'][t-1] * hwi[idx] * (input_sample - populations[pidx - 1]['Winput'][idx])
+                                        populations[pidx-1]['s'][idx] = populations[pidx-1]['s'][idx] + \
+                                        learning_params['alphat'][t-1] *  (1/(math.sqrt(2*math.pi)*learning_params['sigmat'][t-1])) * \
+                                        hwi[idx] * ((input_sample - populations[pidx-1]['Winput'][idx])**2 - populations[pidx-1]['s'][idx]**2)
+                                
+                                if self.DYN_VISUAL == 1 and didx % 100 == 99 and self.SensorIndex == 1:
+                                    self.senddata.emit(populations[0],sensory_data,0,self.pref)
+        #                            self.senddata1.emit(populations[1],sensory_data,1)
+                                    sleep(1.5)
+                                elif self.DYN_VISUAL == 1 and didx % 100 == 99 and self.SensorIndex == 2:
+                                    self.senddata.emit(populations[1],sensory_data,1,self.pref)
+                                    sleep(1.5)
+                                        
+                                        
+                        # learn the cross-modal correlation
+                        for didx in range(sensory_data['num_vals']): #(0-1449)
+                            for pidx in range(1,self.N_SOM+1):
+                                #  pick a new sample from the dataset and feed it to the current layer
+                                if pidx == 1:
+                                        input_sample = sensory_data['x'][didx]
+                                elif pidx == 2:
+                                    input_sample = sensory_data['y'][didx]
+                                for idx in range(populations[pidx-1]['lsize']): # idx qu 0 dao 99
+                                     act_cur[idx] = (1/(math.sqrt(2*math.pi)*populations[pidx-1]['s'][idx]))*math.exp(-(input_sample - populations[pidx-1]['Winput'][idx])**2/(2*populations[pidx-1]['s'][idx]**2))
+                                #  normalize the activity vector of the population
+                                act_cur = act_cur / act_cur.sum()
+                                # update the activity for the next iteration
+                                populations[pidx-1]['a'] = (1-self.ETA)*populations[pidx-1]['a'] + self.ETA*act_cur
+                            if cross_learning == 'hebb':
+                                populations[0]['Wcross'] = (1-self.XI)*populations[0]['Wcross'] + self.XI*populations[0]['a']*populations[1]['a'].T;
+                                populations[1]['Wcross'] = (1-self.XI)*populations[1]['Wcross'] + self.XI*populations[1]['a']*populations[0]['a'].T;
+                            elif cross_learning == 'covariance':
+                                # compute the mean value computation decay
+                                OMEGA = 0.002 + 0.998/(t+2)
+                                for pidx in range(self.N_SOM): # 0 de wen ti 
+                                    avg_act[:, pidx] = (1-OMEGA)*avg_act[:, pidx] + OMEGA*populations[pidx]['a'][:,0]
+                                # cross-modal Hebbian covariance learning rule: update the synaptic weights
+                                populations[0]['Wcross'] = (1-self.XI)*populations[0]['Wcross'] + self.XI*(populations[0]['a'] - avg_act[:, 0].reshape(self.N_NEURONS,1))*(populations[1]['a'] - avg_act[:, 1].reshape(self.N_NEURONS,1)).T
+                                populations[1]['Wcross'] = (1-self.XI)*populations[1]['Wcross'] + self.XI*(populations[1]['a'] - avg_act[:, 1].reshape(self.N_NEURONS,1))*(populations[0]['a'] - avg_act[:, 0].reshape(self.N_NEURONS,1)).T
+                            elif cross_learning == 'oja':
+                                # Oja's local PCA learning rule
+                                populations[0]['Wcross'] = ((1-self.XI)*populations[0]['Wcross'] + self.XI*populations[0]['a']*populations[1]['a'].T)/math.sqrt(sum(sum((1-self.XI)*populations[0]['Wcross'] + self.XI*populations[0]['a']*populations[1]['a'].T)))
+                                populations[1]['Wcross'] = ((1-self.XI)*populations[1]['Wcross'] + self.XI*populations[1]['a']*populations[0]['a'].T)/math.sqrt(sum(sum((1-self.XI)*populations[1]['Wcross'] + self.XI*populations[1]['a']*populations[0]['a'].T)));
+                            else:
+                                print('cross_learning type is not hebb neigher covariance')
                         
-                
-
-                
-            print('Ended training sequence. Presenting results ...\n')                
-            # VISUALIZATION
-            with open('populations1.pkl','wb') as output:
-                pickle.dump(populations,output)
-            with open('sensory_data1.pkl','wb') as output1:
-                pickle.dump(sensory_data,output1)
-            with open('learning_params1.pkl','wb') as output2:
-                pickle.dump(learning_params,output2)       
-            self.present_tuning_curves(populations[0],sensory_data)
-            self.present_tuning_curves(populations[1],sensory_data)
-            populations[0]['Wcross'] = populations[0]['Wcross'] / np.max(populations[0]['Wcross'])  #np.max  keng dian
-            populations[1]['Wcross'] = populations[1]['Wcross'] / np.max(populations[1]['Wcross'])
-            # visualize post-simulation weight matrices encoding learned relation
-            lrn_fct = self.visualize_results(populations,sensory_data,learning_params)
-        if train == False:
-            print('load .pkl  \n')
-            pkl_file1 = open('populations_100.pkl','rb')
-            pop = pickle.load(pkl_file1)
-            pkl_file2 = open('sensory_data_100.pkl','rb')
-            sensory_data = pickle.load(pkl_file2)
-            pkl_file3 = open('learning_params_100.pkl','rb')
-            learning_params1 = pickle.load(pkl_file3)
-            self.present_tuning_curves(pop[0],sensory_data)
-            self.present_tuning_curves(pop[1],sensory_data)
-            self.visualize_results(pop,sensory_data,learning_params1)  
-            
+        #                self.savevalues() 
+        #                print('Wcross_shape:',np.shape(populations[0]['Wcross']))
+                            
+                            if self.DYN_VISUAL == 1 and didx % 100 == 99 and self.SensorIndex == 1:
+                                #print('go111')
+                                self.senddata.emit(populations[0],sensory_data,0,self.pref)
+        #                        self.senddata1.emit(populations[1],sensory_data,1)
+                                sleep(1.5)
+                            elif self.DYN_VISUAL == 1 and didx % 100 == 99 and self.SensorIndex == 2:
+                                self.senddata.emit(populations[1],sensory_data,1,self.pref)
+                                sleep(1.5)
+                        
+        
+                        
+                    print('Ended training sequence. Presenting results ...\n')                
+                    # VISUALIZATION
+                    with open('populations1.pkl','wb') as output:
+                        pickle.dump(populations,output)
+                    with open('sensory_data1.pkl','wb') as output1:
+                        pickle.dump(sensory_data,output1)
+                    with open('learning_params1.pkl','wb') as output2:
+                        pickle.dump(learning_params,output2)       
+                    self.present_tuning_curves(populations[0],sensory_data)
+                    self.present_tuning_curves(populations[1],sensory_data)
+                    populations[0]['Wcross'] = populations[0]['Wcross'] / np.max(populations[0]['Wcross'])  #np.max  keng dian
+                    populations[1]['Wcross'] = populations[1]['Wcross'] / np.max(populations[1]['Wcross'])
+                    # visualize post-simulation weight matrices encoding learned relation
+                    lrn_fct = self.visualize_results(populations,sensory_data,learning_params)
+                if train == False:
+                    print('load .pkl  \n')
+                    pkl_file1 = open('populations_100.pkl','rb')
+                    pop = pickle.load(pkl_file1)
+                    pkl_file2 = open('sensory_data_100.pkl','rb')
+                    sensory_data = pickle.load(pkl_file2)
+                    pkl_file3 = open('learning_params_100.pkl','rb')
+                    learning_params1 = pickle.load(pkl_file3)
+                    self.present_tuning_curves(pop[0],sensory_data)
+                    self.present_tuning_curves(pop[1],sensory_data)
+                    self.visualize_results(pop,sensory_data,learning_params1)  
+                    
+                break
 if __name__ == '__main__':
     F = Func()
     # train == True: the fuction will train the data with Epoch == 2 

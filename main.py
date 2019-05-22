@@ -3,7 +3,7 @@
 """
 Created on Mon May 13 19:20:03 2019
 
-@author: amie
+@author: caxenie & amie
 """
 
 import matplot as mat_plot
